@@ -1,0 +1,19 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "useGulp": false,
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.17.1",
+    "sdksVersions": {},
+    "version": "1.23.2",
+    "libraryName": "forum-cirrus-pilots-app",
+    "libraryId": "9c6dd06b-de1a-473d-9187-cf6e21d48b30",
+    "environment": "spo",
+    "packageManager": "npm",
+    "solutionName": "ForumCirrusPilots_App",
+    "solutionShortDescription": "ForumCirrusPilots_App description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "componentType": "webpart"
+  }
+}

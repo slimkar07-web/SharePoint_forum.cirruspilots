@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "copa-home-page-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/copaHomePage/CopaHomePageWebPart.js",
+          "manifest": "./src/webparts/copaHomePage/CopaHomePageWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "CopaHomePageWebPartStrings": "lib/webparts/copaHomePage/loc/{locale}.js"
+  }
+}

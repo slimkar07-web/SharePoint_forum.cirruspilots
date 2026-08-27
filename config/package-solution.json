@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "forum-cirrus-pilots-app-client-side-solution",
+    "id": "9c6dd06b-de1a-473d-9187-cf6e21d48b30",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.23.2"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "ForumCirrusPilots_App description"
+      },
+      "longDescription": {
+        "default": "ForumCirrusPilots_App description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "forum-cirrus-pilots-app Feature",
+        "description": "The feature that activates elements of the forum-cirrus-pilots-app solution.",
+        "id": "f4adaba1-b9ee-408d-ab55-d63f084dad12",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/forum-cirrus-pilots-app.sppkg"
+  }
+}
