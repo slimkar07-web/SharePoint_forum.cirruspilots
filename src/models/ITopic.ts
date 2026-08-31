@@ -19,4 +19,7 @@ export interface ITopic {
   isPinned?: boolean;
   excerpt?: string;
   tags?: string[];
+  body?: string;
+  likesCount?: number;
+  currentUserLiked?: boolean;
 }

@@ -14,116 +14,9 @@ export class ForumService {
     this.siteUrl = context.pageContext.web.absoluteUrl;
   }
 
-  private getMockCategories(): ICategory[] {
-    return [
-      { 
-        id: 1, 
-        title: 'Guest Discussion', 
-        colorHex: '#00a3cc', 
-        iconName: 'Message',
-        description: 'This category is for non-members of COPA to ask questions of COPA and interact with the COPA community prior to becoming a fully paid member.'
-      },
-      { 
-        id: 2, 
-        title: 'COPA Migrations', 
-        colorHex: '#e22c2c', 
-        iconName: 'Airplane',
-        description: 'This Category is for COPA Annual Migration Announcements/Questions/Suggestions.'
-      },
-      { 
-        id: 3, 
-        title: 'Website Issues', 
-        colorHex: '#999999', 
-        iconName: 'Build',
-        description: 'This category is available publicly to serve as a place to resolve access issues to the website. ALL posts in this section will auto-close after 3 days and are publicly visible.'
-      },
-      { 
-        id: 4, 
-        title: 'Public Announcements', 
-        colorHex: '#0f9d58', 
-        iconName: 'Megaphone',
-        description: 'Important public announcements from the COPA organization.'
-      }
-    ];
-  }
 
-  private getMockTopics(categoryName: string): ITopic[] {
-    const mockTopics = [
-      {
-        id: 1,
-        title: 'Migration 2026 Volunteers Needed!',
-        url: 'https://forum.cirruspilots.org/t/1',
-        repliesCount: 6,
-        viewsCount: 641,
-        lastActivity: new Date(),
-        category: 'COPA Migrations',
-        isLocked: false,
-        isPinned: true,
-        tags: ['Volunteers', '2026'],
-        posters: [{ id: '1', displayName: 'John Doe', email: 'john@example.com' }]
-      },
-      {
-        id: 2,
-        title: 'Can I attend without a plane?',
-        url: 'https://forum.cirruspilots.org/t/2',
-        repliesCount: 42,
-        viewsCount: 1205,
-        lastActivity: new Date(Date.now() - 86400000),
-        category: 'Guest Discussion',
-        isLocked: false,
-        isPinned: false,
-        tags: ['Questions'],
-        posters: [{ id: '2', displayName: 'Jane Smith', email: 'jane@example.com' }]
-      },
-      {
-        id: 3,
-        title: 'Login issues on the new portal',
-        url: 'https://forum.cirruspilots.org/t/3',
-        repliesCount: 8,
-        viewsCount: 150,
-        lastActivity: new Date(Date.now() - 172800000),
-        category: 'Website Issues',
-        isLocked: false,
-        isPinned: false,
-        tags: ['Login', 'Portal'],
-        posters: [{ id: '3', displayName: 'Mike Johnson', email: 'mike@example.com' }]
-      }
-    ];
-
-    if (categoryName && categoryName !== 'All Categories') {
-      return mockTopics.filter(t => t.category === categoryName);
-    }
-    return mockTopics;
-  }
-
-  private getMockReplies(topicId: number): IReply[] {
-    return [
-      {
-        id: 1,
-        title: 'Reply 1',
-        topicId: topicId,
-        body: '<p>This is a mock reply to the topic.</p>',
-        authorName: 'John Doe',
-        authorEmail: 'john@example.com',
-        createdDate: new Date()
-      },
-      {
-        id: 2,
-        title: 'Reply 2',
-        topicId: topicId,
-        body: '<p>Another mock reply.</p>',
-        authorName: 'Jane Smith',
-        authorEmail: 'jane@example.com',
-        createdDate: new Date(Date.now() - 3600000)
-      }
-    ];
-  }
 
   public async getCategories(): Promise<ICategory[]> {
-    if (Environment.type === EnvironmentType.Local || Environment.type === EnvironmentType.Test) {
-      return this.getMockCategories();
-    }
-
     const listName = 'ForumCategories';
     const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Description,ColorHex,IconName`;
 
@@ -132,7 +25,7 @@ export class ForumService {
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
-        return this.getMockCategories(); // Fallback to mock if list is empty
+        return []; // Return empty if there are no categories yet
       }
 
       return data.value.map((item: any) => ({
@@ -144,29 +37,26 @@ export class ForumService {
       }));
     } catch (error) {
       console.error('Error fetching categories from SharePoint list', error);
-      return this.getMockCategories(); // Fallback to mock on error
+      return []; // Return empty on error
     }
   }
 
   public async getTopics(categoryName: string): Promise<ITopic[]> {
-    if (Environment.type === EnvironmentType.Local || Environment.type === EnvironmentType.Test) {
-      return this.getMockTopics(categoryName);
-    }
-
     const listName = 'ForumTopics'; 
     let filterQuery = '';
     if (categoryName && categoryName !== 'All Categories') {
       filterQuery = `&$filter=Category/Title eq '${categoryName}'`;
     }
 
-    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,RepliesCount,ViewsCount,LastActivity,Category/Title,IsLocked,IsPinned,Tags,Author/EMail,Author/Title&$expand=Author,Category${filterQuery}&$orderby=LastActivity desc`;
+    // Safely removed LastActivity, IsLocked, IsPinned, Tags from $select just in case they are missing from the list schema. We will sort by Modified instead.
+    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,Modified,Category/Title,Author/EMail,Author/Title&$expand=Author,Category${filterQuery}&$orderby=Modified desc`;
 
     try {
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
-        return this.getMockTopics(categoryName); // Fallback to mock if list is empty
+        return []; // Return empty if list is empty
       }
 
       return data.value.map((item: any) => ({
@@ -175,11 +65,14 @@ export class ForumService {
         url: `https://forum.cirruspilots.org/t/${item.Id}`,
         repliesCount: item.RepliesCount || 0,
         viewsCount: item.ViewsCount || 0,
-        lastActivity: new Date(item.LastActivity || new Date()),
+        lastActivity: new Date(item.Modified || new Date()),
         category: item.Category?.Title,
-        isLocked: !!item.IsLocked,
-        isPinned: !!item.IsPinned,
-        tags: item.Tags ? item.Tags.split(',').map((t: string) => t.trim()) : [],
+        isLocked: false,
+        isPinned: false,
+        body: item.Body,
+        likesCount: item.LikesCount || 0,
+        currentUserLiked: false,
+        tags: [],
         posters: [
           {
             id: item.Author?.EMail || item.Id.toString(),
@@ -190,24 +83,20 @@ export class ForumService {
       }));
     } catch (error) {
       console.error('Error fetching topics from SharePoint list', error);
-      return this.getMockTopics(categoryName); // Fallback to mock on error
+      return []; // Return empty on error
     }
   }
 
   public async getReplies(topicId: number): Promise<IReply[]> {
-    if (Environment.type === EnvironmentType.Local || Environment.type === EnvironmentType.Test) {
-      return this.getMockReplies(topicId);
-    }
-
     const listName = 'ForumReplies'; 
-    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicId eq ${topicId}&$orderby=Created asc`;
+    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,LikesCount,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicIdId eq ${topicId}&$orderby=Created asc`;
 
     try {
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
-        return this.getMockReplies(topicId);
+        return []; // Return empty if there are no replies yet
       }
 
       return data.value.map((item: any) => ({
@@ -218,11 +107,205 @@ export class ForumService {
         isAcceptedAnswer: !!item.IsAcceptedAnswer,
         authorName: item.Author?.Title || 'Unknown User',
         authorEmail: item.Author?.EMail,
-        createdDate: new Date(item.Created)
+        createdDate: new Date(item.Created),
+        likesCount: item.LikesCount || 0,
+        currentUserLiked: false // Mocked for now
       }));
     } catch (error) {
       console.error('Error fetching replies from SharePoint list', error);
-      return this.getMockReplies(topicId);
+      return [];
+    }
+  }
+
+  public async createTopic(topic: Partial<ITopic>, files?: File[], categoryId?: number): Promise<ITopic | null> {
+    const listName = 'ForumTopics';
+    const body = JSON.stringify({
+      Title: topic.title,
+      Body: topic.body,
+      CategoryIdId: categoryId // Set the lookup ID for the category
+    });
+
+    try {
+      const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items`, 
+        SPHttpClient.configurations.v1, 
+        {
+          headers: {
+            'Accept': 'application/json;odata=nometadata',
+            'Content-type': 'application/json;odata=nometadata',
+            'odata-version': ''
+          },
+          body: body
+        }
+      );
+      
+      const item = await response.json();
+
+      // Handle file attachments
+      if (files && files.length > 0) {
+        for (const file of files) {
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            await this.context.spHttpClient.post(
+              `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items(${item.Id})/AttachmentFiles/add(FileName='${file.name}')`,
+              SPHttpClient.configurations.v1,
+              {
+                headers: {
+                  'Accept': 'application/json;odata=nometadata',
+                  'Content-type': 'application/octet-stream'
+                },
+                body: arrayBuffer
+              }
+            );
+          } catch (fileErr) {
+            console.error(`Failed to upload attachment ${file.name}`, fileErr);
+          }
+        }
+      }
+
+      return {
+        id: item.Id,
+        title: item.Title || topic.title,
+        url: `https://forum.cirruspilots.org/t/${item.Id}`,
+        repliesCount: 0,
+        viewsCount: 0,
+        likesCount: 0,
+        lastActivity: new Date(),
+        category: topic.category,
+        body: topic.body || item.Body, // Use the user's input immediately so it displays in the UI!
+        posters: [{ id: this.context.pageContext.user.email, displayName: this.context.pageContext.user.displayName, email: this.context.pageContext.user.email }]
+      };
+    } catch (error) {
+      console.error('Error creating topic', error);
+      return null;
+    }
+  }
+
+  public async createReply(topicId: number, replyBody: string): Promise<IReply | null> {
+    const listName = 'ForumReplies';
+    const body = JSON.stringify({
+      Title: `Reply to ${topicId}`,
+      Body: replyBody,
+      TopicIdId: topicId, // SP formatting for lookup field
+      LikesCount: 0
+    });
+
+    try {
+      const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items`, 
+        SPHttpClient.configurations.v1, 
+        {
+          headers: {
+            'Accept': 'application/json;odata=nometadata',
+            'Content-type': 'application/json;odata=nometadata',
+            'odata-version': ''
+          },
+          body: body
+        }
+      );
+      
+      const item = await response.json();
+      
+      // Also update the topic's reply count and last activity
+      await this._incrementTopicRepliesAndActivity(topicId);
+
+      return {
+        id: item.Id,
+        title: item.Title,
+        topicId: topicId,
+        body: item.Body,
+        authorName: this.context.pageContext.user.displayName,
+        authorEmail: this.context.pageContext.user.email,
+        createdDate: new Date(),
+        likesCount: 0
+      };
+    } catch (error) {
+      console.error('Error creating reply', error);
+      return null;
+    }
+  }
+
+  private async _incrementTopicRepliesAndActivity(topicId: number): Promise<void> {
+    // In a production app, you might want to use a more robust way to increment, but this is a simple update
+    try {
+      // First get current count
+      const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})?$select=RepliesCount`, SPHttpClient.configurations.v1);
+      const data = await getResponse.json();
+      const currentCount = data.RepliesCount || 0;
+
+      const body = JSON.stringify({
+        RepliesCount: currentCount + 1,
+        LastActivity: new Date().toISOString()
+      });
+
+      await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
+        SPHttpClient.configurations.v1, 
+        {
+          headers: {
+            'Accept': 'application/json;odata=nometadata',
+            'Content-type': 'application/json;odata=nometadata',
+            'X-HTTP-Method': 'MERGE',
+            'IF-MATCH': '*'
+          },
+          body: body
+        }
+      );
+    } catch (error) {
+      console.error('Failed to update topic replies count', error);
+    }
+  }
+
+  public async likeTopic(topicId: number): Promise<void> {
+    
+    try {
+      const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})?$select=LikesCount`, SPHttpClient.configurations.v1);
+      const data = await getResponse.json();
+      const currentCount = data.LikesCount || 0;
+
+      const body = JSON.stringify({
+        LikesCount: currentCount + 1
+      });
+
+      await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
+        SPHttpClient.configurations.v1, 
+        {
+          headers: {
+            'Accept': 'application/json;odata=nometadata',
+            'Content-type': 'application/json;odata=nometadata',
+            'X-HTTP-Method': 'MERGE',
+            'IF-MATCH': '*'
+          },
+          body: body
+        }
+      );
+    } catch (error) {
+      console.error('Failed to like topic', error);
+    }
+  }
+
+  public async likeReply(replyId: number): Promise<void> {
+    
+    try {
+      const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})?$select=LikesCount`, SPHttpClient.configurations.v1);
+      const data = await getResponse.json();
+      const currentCount = data.LikesCount || 0;
+
+      const body = JSON.stringify({
+        LikesCount: currentCount + 1
+      });
+
+      await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})`, 
+        SPHttpClient.configurations.v1, 
+        {
+          headers: {
+            'Accept': 'application/json;odata=nometadata',
+            'Content-type': 'application/json;odata=nometadata',
+            'X-HTTP-Method': 'MERGE',
+            'IF-MATCH': '*'
+          },
+          body: body
+        }
+      );
+    } catch (error) {
+      console.error('Failed to like reply', error);
     }
   }
 }

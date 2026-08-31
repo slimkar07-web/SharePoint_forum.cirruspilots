@@ -1,0 +1,239 @@
+@import '~@microsoft/sp-office-ui-fabric-core/dist/sass/SPFabricCore.scss';
+
+.topicCardContainer {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+
+  .cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+
+    .headerLeft {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .authorAvatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+      }
+
+      .headerInfo {
+        display: flex;
+        flex-direction: column;
+
+        .authorName {
+          font-weight: 600;
+          color: #323130;
+          font-size: 14px;
+        }
+
+        .metaInfo {
+          font-size: 12px;
+          color: #605e5c;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+
+          .categoryBadge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+
+            .categoryColor {
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .cardContent {
+    .topicTitle {
+      font-size: 18px;
+      font-weight: 600;
+      color: #323130;
+      margin-top: 0;
+      margin-bottom: 8px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      &:hover {
+        color: #0078d4;
+      }
+      
+      .iconPinned { color: #0078d4; font-size: 14px; }
+      .iconLocked { color: #605e5c; font-size: 14px; }
+    }
+
+    .topicBody {
+      font-size: 14px;
+      color: #323130;
+      line-height: 1.5;
+      margin-bottom: 12px;
+      
+      /* Simple truncate for feed view if body is too long */
+      max-height: 100px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }
+  }
+
+  .cardActions {
+    display: flex;
+    align-items: center;
+    border-top: 1px solid #edebe9;
+    padding-top: 12px;
+    gap: 24px;
+
+    .actionButton {
+      background: none;
+      border: none;
+      color: #605e5c;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: #f3f2f1;
+        color: #323130;
+      }
+
+      &.liked {
+        color: #0078d4;
+        .icon {
+          color: #0078d4;
+        }
+      }
+      
+      .icon {
+        font-size: 16px;
+      }
+    }
+  }
+
+  .repliesSection {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed #edebe9;
+    
+    .replyInputArea {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+
+      .replyAvatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: #e1dfdd;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #605e5c;
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      .replyInputWrapper {
+        flex-grow: 1;
+        display: flex;
+        border: 1px solid #edebe9;
+        border-radius: 20px;
+        overflow: hidden;
+        
+        &:focus-within {
+          border-color: #0078d4;
+        }
+
+        .replyInput {
+          flex-grow: 1;
+          border: none;
+          outline: none;
+          padding: 8px 16px;
+          font-size: 14px;
+        }
+
+        .replySubmitBtn {
+          background: none;
+          border: none;
+          color: #0078d4;
+          cursor: pointer;
+          padding: 0 16px;
+          
+          &:disabled {
+            color: #a19f9d;
+            cursor: not-allowed;
+          }
+        }
+      }
+    }
+
+    .repliesList {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .replyItem {
+        display: flex;
+        gap: 12px;
+        
+        .replyAvatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+        }
+
+        .replyContent {
+          flex-grow: 1;
+          background-color: #f3f2f1;
+          padding: 10px 12px;
+          border-radius: 8px;
+          
+          .replyHeader {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            
+            .replyAuthor {
+              font-weight: 600;
+              font-size: 13px;
+              color: #323130;
+            }
+            .replyDate {
+              font-size: 12px;
+              color: #605e5c;
+            }
+          }
+          
+          .replyBody {
+            font-size: 13px;
+            color: #323130;
+          }
+        }
+      }
+    }
+  }
+}

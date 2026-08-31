@@ -7,4 +7,6 @@ export interface IReply {
   authorEmail?: string;
   authorName?: string;
   createdDate: Date;
+  likesCount?: number;
+  currentUserLiked?: boolean;
 }

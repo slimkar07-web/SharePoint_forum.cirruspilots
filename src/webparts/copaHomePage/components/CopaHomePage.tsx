@@ -3,6 +3,7 @@ import { Icon } from '@fluentui/react';
 import styles from './CopaHomePage.module.scss';
 import type { ICopaHomePageProps } from './ICopaHomePageProps';
 import { TopicList } from './TopicList/TopicList';
+import { CreatePost } from './CreatePost/CreatePost';
 import { ForumService } from '../../../services/ForumService';
 import { ITopic } from '../../../models/ITopic';
 import { ICategory } from '../../../models/ICategory';
@@ -69,6 +70,17 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
 
   private toggleSearch = () => {
     this.setState({ isSearchOpen: !this.state.isSearchOpen, isHamburgerOpen: false, isCategoryOpen: false });
+  }
+
+  private handleCreatePost = async (title: string, body: string, categoryId: number, files: File[]) => {
+    // We pass categoryId so ForumService can link it to the lookup column in SharePoint
+    const newTopic = await this._forumService.createTopic({ title, body, category: 'Loading...' }, files, categoryId);
+    if (newTopic) {
+      // Refresh topics or just prepend it to the list
+      this.setState(prevState => ({
+        topics: [newTopic, ...prevState.topics]
+      }));
+    }
   }
 
   private handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,7 +231,18 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
           {this.state.isLoading ? (
             <div style={{color: '#fff', padding: '20px'}}>Loading topics...</div>
           ) : (
-            <TopicList topics={this.state.topics} />
+            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+              <CreatePost 
+                categories={this.state.categories} 
+                onCreatePost={this.handleCreatePost}
+                currentUserDisplayName={this.props.context.pageContext.user.displayName}
+              />
+              <TopicList 
+                topics={this.state.topics} 
+                forumService={this._forumService}
+                currentUserDisplayName={this.props.context.pageContext.user.displayName}
+              />
+            </div>
           )}
         </div>
       </section>
