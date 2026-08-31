@@ -30,14 +30,19 @@ export const CreatePost: React.FunctionComponent<ICreatePostProps> = (props) => 
     if (!title.trim() || !body.trim() || !selectedCategory) return;
     
     setIsSubmitting(true);
-    await props.onCreatePost(title, body, selectedCategory, attachedFiles);
-    
-    // Reset form
-    setTitle('');
-    setBody('');
-    setAttachedFiles([]);
-    setIsExpanded(false);
-    setIsSubmitting(false);
+    try {
+      await props.onCreatePost(title, body, selectedCategory, attachedFiles);
+      
+      // Reset form
+      setTitle('');
+      setBody('');
+      setAttachedFiles([]);
+      setIsExpanded(false);
+    } catch (error) {
+      alert("Failed to post topic:\n\n" + (error as Error).message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

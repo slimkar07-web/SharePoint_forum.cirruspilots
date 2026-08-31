@@ -22,6 +22,12 @@ export class ForumService {
 
     try {
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to fetch categories: ${response.status} - ${errText}`);
+      }
+
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
@@ -53,6 +59,12 @@ export class ForumService {
 
     try {
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to fetch topics: ${response.status} - ${errText}`);
+      }
+
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
@@ -89,10 +101,16 @@ export class ForumService {
 
   public async getReplies(topicId: number): Promise<IReply[]> {
     const listName = 'ForumReplies'; 
-    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,LikesCount,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicIdId eq ${topicId}&$orderby=Created asc`;
+    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,LikesCount,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicId eq ${topicId}&$orderby=Created asc`;
 
     try {
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to fetch replies: ${response.status} - ${errText}`);
+      }
+
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
@@ -122,22 +140,22 @@ export class ForumService {
     const body = JSON.stringify({
       Title: topic.title,
       Body: topic.body,
-      CategoryIdId: categoryId // Set the lookup ID for the category
+      CategoryId: categoryId // Set the lookup ID for the category
     });
 
     try {
       const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items`, 
         SPHttpClient.configurations.v1, 
         {
-          headers: {
-            'Accept': 'application/json;odata=nometadata',
-            'Content-type': 'application/json;odata=nometadata',
-            'odata-version': ''
-          },
           body: body
         }
       );
       
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to create topic: ${response.status} - ${errText}`);
+      }
+
       const item = await response.json();
 
       // Handle file attachments
@@ -145,17 +163,20 @@ export class ForumService {
         for (const file of files) {
           try {
             const arrayBuffer = await file.arrayBuffer();
-            await this.context.spHttpClient.post(
+            const uploadResponse = await this.context.spHttpClient.post(
               `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items(${item.Id})/AttachmentFiles/add(FileName='${file.name}')`,
               SPHttpClient.configurations.v1,
               {
                 headers: {
-                  'Accept': 'application/json;odata=nometadata',
                   'Content-type': 'application/octet-stream'
                 },
                 body: arrayBuffer
               }
             );
+            if (!uploadResponse.ok) {
+              const errText = await uploadResponse.text();
+              console.error(`Failed to upload attachment ${file.name}: ${uploadResponse.status} - ${errText}`);
+            }
           } catch (fileErr) {
             console.error(`Failed to upload attachment ${file.name}`, fileErr);
           }
@@ -185,7 +206,7 @@ export class ForumService {
     const body = JSON.stringify({
       Title: `Reply to ${topicId}`,
       Body: replyBody,
-      TopicIdId: topicId, // SP formatting for lookup field
+      TopicId: topicId, // SP formatting for lookup field
       LikesCount: 0
     });
 
@@ -193,15 +214,15 @@ export class ForumService {
       const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items`, 
         SPHttpClient.configurations.v1, 
         {
-          headers: {
-            'Accept': 'application/json;odata=nometadata',
-            'Content-type': 'application/json;odata=nometadata',
-            'odata-version': ''
-          },
           body: body
         }
       );
       
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to create reply: ${response.status} - ${errText}`);
+      }
+
       const item = await response.json();
       
       // Also update the topic's reply count and last activity
@@ -232,22 +253,24 @@ export class ForumService {
       const currentCount = data.RepliesCount || 0;
 
       const body = JSON.stringify({
-        RepliesCount: currentCount + 1,
-        LastActivity: new Date().toISOString()
+        RepliesCount: currentCount + 1
       });
 
-      await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
+      const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
         SPHttpClient.configurations.v1, 
         {
           headers: {
-            'Accept': 'application/json;odata=nometadata',
-            'Content-type': 'application/json;odata=nometadata',
             'X-HTTP-Method': 'MERGE',
             'IF-MATCH': '*'
           },
           body: body
         }
       );
+      
+      if (!postResponse.ok) {
+        const errText = await postResponse.text();
+        console.error(`Failed to update topic replies count: ${postResponse.status} - ${errText}`);
+      }
     } catch (error) {
       console.error('Failed to update topic replies count', error);
     }
@@ -264,18 +287,21 @@ export class ForumService {
         LikesCount: currentCount + 1
       });
 
-      await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
+      const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
         SPHttpClient.configurations.v1, 
         {
           headers: {
-            'Accept': 'application/json;odata=nometadata',
-            'Content-type': 'application/json;odata=nometadata',
             'X-HTTP-Method': 'MERGE',
             'IF-MATCH': '*'
           },
           body: body
         }
       );
+
+      if (!postResponse.ok) {
+        const errText = await postResponse.text();
+        console.error(`Failed to like topic: ${postResponse.status} - ${errText}`);
+      }
     } catch (error) {
       console.error('Failed to like topic', error);
     }
@@ -292,18 +318,21 @@ export class ForumService {
         LikesCount: currentCount + 1
       });
 
-      await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})`, 
+      const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})`, 
         SPHttpClient.configurations.v1, 
         {
           headers: {
-            'Accept': 'application/json;odata=nometadata',
-            'Content-type': 'application/json;odata=nometadata',
             'X-HTTP-Method': 'MERGE',
             'IF-MATCH': '*'
           },
           body: body
         }
       );
+
+      if (!postResponse.ok) {
+        const errText = await postResponse.text();
+        console.error(`Failed to like reply: ${postResponse.status} - ${errText}`);
+      }
     } catch (error) {
       console.error('Failed to like reply', error);
     }

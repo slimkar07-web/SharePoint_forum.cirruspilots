@@ -30,7 +30,13 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
     
     setIsLiked(true);
     setLikesCount(prev => prev + 1);
-    await forumService.likeTopic(topic.id);
+    try {
+      await forumService.likeTopic(topic.id);
+    } catch (error) {
+      setIsLiked(false);
+      setLikesCount(prev => prev - 1);
+      alert("Failed to like topic: " + (error as Error).message);
+    }
   };
 
   const toggleReplies = async () => {
@@ -48,13 +54,18 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
     if (!newReplyBody.trim()) return;
     setIsSubmittingReply(true);
     
-    const newReply = await forumService.createReply(topic.id, newReplyBody);
-    if (newReply) {
-      setReplies(prev => [...prev, newReply]);
-      setRepliesCount(prev => prev + 1);
-      setNewReplyBody('');
+    try {
+      const newReply = await forumService.createReply(topic.id, newReplyBody);
+      if (newReply) {
+        setReplies(prev => [...prev, newReply]);
+        setRepliesCount(prev => prev + 1);
+        setNewReplyBody('');
+      }
+    } catch (error) {
+      alert("Failed to post reply:\n\n" + (error as Error).message);
+    } finally {
+      setIsSubmittingReply(false);
     }
-    setIsSubmittingReply(false);
   };
 
   const formatDate = (date: Date) => {
