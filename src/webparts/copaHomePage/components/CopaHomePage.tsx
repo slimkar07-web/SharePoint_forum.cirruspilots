@@ -23,6 +23,7 @@ export interface ICopaHomePageState {
 
 export default class CopaHomePage extends React.Component<ICopaHomePageProps, ICopaHomePageState> {
   private _forumService: ForumService;
+  private _containerRef: React.RefObject<HTMLDivElement>;
 
   constructor(props: ICopaHomePageProps) {
     super(props);
@@ -39,9 +40,11 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
       isCategoriesLoading: true
     };
     this._forumService = new ForumService(props.context);
+    this._containerRef = React.createRef<HTMLDivElement>();
   }
 
   public async componentDidMount(): Promise<void> {
+    document.addEventListener('mousedown', this.handleClickOutside);
     void this._loadCategories();
     void this._loadTopics(this.state.selectedCategory);
   }
@@ -49,6 +52,22 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
   public componentDidUpdate(prevProps: ICopaHomePageProps, prevState: ICopaHomePageState): void {
     if (prevState.selectedCategory !== this.state.selectedCategory) {
       void this._loadTopics(this.state.selectedCategory);
+    }
+  }
+
+  public componentWillUnmount(): void {
+    document.removeEventListener('mousedown', this.handleClickOutside);
+  }
+
+  private handleClickOutside = (event: MouseEvent) => {
+    if (this._containerRef.current && !this._containerRef.current.contains(event.target as Node)) {
+      if (this.state.isCategoryOpen || this.state.isHamburgerOpen || this.state.isSearchOpen) {
+        this.setState({
+          isCategoryOpen: false,
+          isHamburgerOpen: false,
+          isSearchOpen: false
+        });
+      }
     }
   }
 
@@ -108,8 +127,20 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
   }
 
   public render(): React.ReactElement<ICopaHomePageProps> {
+    const sortedTopics = [...this.state.topics].sort((a, b) => {
+      if (this.state.selectedTab === 'top') {
+        // Sort by total engagement (likes + replies + views)
+        const engagementA = (a.likesCount || 0) + (a.repliesCount || 0) + (a.viewsCount || 0);
+        const engagementB = (b.likesCount || 0) + (b.repliesCount || 0) + (b.viewsCount || 0);
+        return engagementB - engagementA;
+      } else {
+        // Default to 'latest'
+        return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+      }
+    });
+
     return (
-      <section className={`${styles.copaHomePage}`}>
+      <section className={`${styles.copaHomePage}`} ref={this._containerRef}>
         <header className={styles.header}>
           <div className={styles.logoArea}>
             {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
@@ -238,7 +269,7 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
                 currentUserDisplayName={this.props.context.pageContext.user.displayName}
               />
               <TopicList 
-                topics={this.state.topics} 
+                topics={sortedTopics} 
                 forumService={this._forumService}
                 currentUserDisplayName={this.props.context.pageContext.user.displayName}
               />

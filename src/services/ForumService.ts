@@ -1,6 +1,5 @@
 import { WebPartContext } from '@microsoft/sp-webpart-base';
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
-import { Environment, EnvironmentType } from '@microsoft/sp-core-library';
 import { ITopic } from '../models/ITopic';
 import { ICategory } from '../models/ICategory';
 import { IReply } from '../models/IReply';
@@ -13,8 +12,6 @@ export class ForumService {
     this.context = context;
     this.siteUrl = context.pageContext.web.absoluteUrl;
   }
-
-
 
   public async getCategories(): Promise<ICategory[]> {
     const listName = 'ForumCategories';
@@ -31,19 +28,19 @@ export class ForumService {
       const data = await response.json();
 
       if (!data.value || data.value.length === 0) {
-        return []; // Return empty if there are no categories yet
+        return [];
       }
 
       return data.value.map((item: any) => ({
         id: item.Id,
         title: item.Title,
         description: item.Description,
-        colorHex: item.ColorHex || '#999999',
+        colorHex: item.ColorHex || '#0078d4',
         iconName: item.IconName
       }));
     } catch (error) {
       console.error('Error fetching categories from SharePoint list', error);
-      return []; // Return empty on error
+      return [];
     }
   }
 
@@ -54,101 +51,128 @@ export class ForumService {
       filterQuery = `&$filter=Category/Title eq '${categoryName}'`;
     }
 
-    // Safely removed LastActivity, IsLocked, IsPinned, Tags from $select just in case they are missing from the list schema. We will sort by Modified instead.
-    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,Modified,Category/Title,Author/EMail,Author/Title&$expand=Author,Category${filterQuery}&$orderby=Modified desc`;
+    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,Modified,Category/Title,Category/ColorHex,Author/EMail,Author/Title,ViewsCount,RepliesCount,AttachmentFiles&$expand=Author,Category,AttachmentFiles${filterQuery}&$orderby=Modified desc`;
 
     try {
+      // Fetch topics
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
-      
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`Failed to fetch topics: ${response.status} - ${errText}`);
       }
-
       const data = await response.json();
+      if (!data.value || data.value.length === 0) return [];
 
-      if (!data.value || data.value.length === 0) {
-        return []; // Return empty if list is empty
+      // Fetch all topic likes to compute counts and user status
+      let allTopicLikes: any[] = [];
+      try {
+        const likesQuery = `${this.siteUrl}/_api/web/lists/getByTitle('ForumTopicLikes')/items?$select=TopicId,UserEmail`;
+        const likesRes = await this.context.spHttpClient.get(likesQuery, SPHttpClient.configurations.v1);
+        const likesData = await likesRes.json();
+        if (likesData.value) {
+          allTopicLikes = likesData.value;
+        }
+      } catch (e) {
+        console.error('Failed to fetch user likes', e);
       }
 
-      return data.value.map((item: any) => ({
-        id: item.Id,
-        title: item.Title,
-        url: `https://forum.cirruspilots.org/t/${item.Id}`,
-        repliesCount: item.RepliesCount || 0,
-        viewsCount: item.ViewsCount || 0,
-        lastActivity: new Date(item.Modified || new Date()),
-        category: item.Category?.Title,
-        isLocked: false,
-        isPinned: false,
-        body: item.Body,
-        likesCount: item.LikesCount || 0,
-        currentUserLiked: false,
-        tags: [],
-        posters: [
-          {
-            id: item.Author?.EMail || item.Id.toString(),
-            displayName: item.Author?.Title || 'Unknown User',
-            email: item.Author?.EMail
-          }
-        ]
-      }));
+      return data.value.map((item: any) => {
+        const topicLikes = allTopicLikes.filter(l => l.TopicId === item.Id);
+        const currentUserLiked = topicLikes.some(l => l.UserEmail === this.context.pageContext.user.email);
+        
+        return {
+          id: item.Id,
+          title: item.Title,
+          url: `https://forum.cirruspilots.org/t/${item.Id}`,
+          repliesCount: item.RepliesCount || 0,
+          viewsCount: item.ViewsCount || 0,
+          lastActivity: new Date(item.Modified || new Date()),
+          category: item.Category?.Title,
+          categoryColor: item.Category?.ColorHex || '#0078d4',
+          isLocked: false,
+          isPinned: false,
+          body: item.Body,
+          likesCount: topicLikes.length,
+          currentUserLiked: currentUserLiked,
+          attachments: item.AttachmentFiles?.map((f: any) => ({ fileName: f.FileName, serverRelativeUrl: f.ServerRelativeUrl })) || [],
+          tags: [],
+          posters: [
+            {
+              id: item.Author?.EMail || item.Id.toString(),
+              displayName: item.Author?.Title || 'Unknown User',
+              email: item.Author?.EMail
+            }
+          ]
+        };
+      });
     } catch (error) {
       console.error('Error fetching topics from SharePoint list', error);
-      return []; // Return empty on error
+      return [];
     }
   }
 
   public async getReplies(topicId: number): Promise<IReply[]> {
     const listName = 'ForumReplies'; 
-    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,LikesCount,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicId eq ${topicId}&$orderby=Created asc`;
+    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicId eq ${topicId}&$orderby=Created asc`;
 
     try {
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
-      
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`Failed to fetch replies: ${response.status} - ${errText}`);
       }
-
       const data = await response.json();
+      if (!data.value || data.value.length === 0) return [];
 
-      if (!data.value || data.value.length === 0) {
-        return []; // Return empty if there are no replies yet
+      let allReplyLikes: any[] = [];
+      try {
+        const likesQuery = `${this.siteUrl}/_api/web/lists/getByTitle('ForumReplyLikes')/items?$select=ReplyId,UserEmail`;
+        const likesRes = await this.context.spHttpClient.get(likesQuery, SPHttpClient.configurations.v1);
+        const likesData = await likesRes.json();
+        if (likesData.value) {
+          allReplyLikes = likesData.value;
+        }
+      } catch (e) {
+        console.error('Failed to fetch reply likes', e);
       }
 
-      return data.value.map((item: any) => ({
-        id: item.Id,
-        title: item.Title,
-        topicId: topicId,
-        body: item.Body,
-        isAcceptedAnswer: !!item.IsAcceptedAnswer,
-        authorName: item.Author?.Title || 'Unknown User',
-        authorEmail: item.Author?.EMail,
-        createdDate: new Date(item.Created),
-        likesCount: item.LikesCount || 0,
-        currentUserLiked: false // Mocked for now
-      }));
+      return data.value.map((item: any) => {
+        const replyLikes = allReplyLikes.filter(l => l.ReplyId === item.Id);
+        const currentUserLiked = replyLikes.some(l => l.UserEmail === this.context.pageContext.user.email);
+        
+        return {
+          id: item.Id,
+          title: item.Title,
+          topicId: topicId,
+          body: item.Body,
+          isAcceptedAnswer: !!item.IsAcceptedAnswer,
+          authorName: item.Author?.Title || 'Unknown User',
+          authorEmail: item.Author?.EMail,
+          createdDate: new Date(item.Created),
+          likesCount: replyLikes.length,
+          currentUserLiked: currentUserLiked
+        };
+      });
     } catch (error) {
       console.error('Error fetching replies from SharePoint list', error);
       return [];
     }
   }
 
-  public async createTopic(topic: Partial<ITopic>, files?: File[], categoryId?: number): Promise<ITopic | null> {
+  public async createTopic(topic: Partial<ITopic>, files?: File[], categoryId?: number): Promise<ITopic | undefined> {
     const listName = 'ForumTopics';
     const body = JSON.stringify({
       Title: topic.title,
       Body: topic.body,
-      CategoryId: categoryId // Set the lookup ID for the category
+      CategoryId: categoryId,
+      ViewsCount: 0,
+      RepliesCount: 0
     });
 
     try {
       const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items`, 
         SPHttpClient.configurations.v1, 
-        {
-          body: body
-        }
+        { body: body }
       );
       
       if (!response.ok) {
@@ -157,6 +181,7 @@ export class ForumService {
       }
 
       const item = await response.json();
+      const attachments = [];
 
       // Handle file attachments
       if (files && files.length > 0) {
@@ -167,55 +192,55 @@ export class ForumService {
               `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items(${item.Id})/AttachmentFiles/add(FileName='${file.name}')`,
               SPHttpClient.configurations.v1,
               {
-                headers: {
-                  'Content-type': 'application/octet-stream'
-                },
+                headers: { 'Content-type': 'application/octet-stream' },
                 body: arrayBuffer
               }
             );
             if (!uploadResponse.ok) {
               const errText = await uploadResponse.text();
-              console.error(`Failed to upload attachment ${file.name}: ${uploadResponse.status} - ${errText}`);
+              throw new Error(errText);
             }
+            const uploadedFile = await uploadResponse.json();
+            attachments.push({ fileName: uploadedFile.FileName, serverRelativeUrl: uploadedFile.ServerRelativeUrl });
           } catch (fileErr) {
             console.error(`Failed to upload attachment ${file.name}`, fileErr);
+            throw new Error(`Topic created, but failed to upload attachment ${file.name}: ${(fileErr as Error).message}`);
           }
         }
       }
 
       return {
         id: item.Id,
-        title: item.Title || topic.title,
+        title: item.Title || topic.title || '',
         url: `https://forum.cirruspilots.org/t/${item.Id}`,
         repliesCount: 0,
         viewsCount: 0,
         likesCount: 0,
         lastActivity: new Date(),
         category: topic.category,
-        body: topic.body || item.Body, // Use the user's input immediately so it displays in the UI!
+        body: topic.body || item.Body,
+        attachments: attachments,
         posters: [{ id: this.context.pageContext.user.email, displayName: this.context.pageContext.user.displayName, email: this.context.pageContext.user.email }]
       };
     } catch (error) {
       console.error('Error creating topic', error);
-      return null;
+      throw error;
     }
   }
 
-  public async createReply(topicId: number, replyBody: string): Promise<IReply | null> {
+  public async createReply(topicId: number, replyBody: string): Promise<IReply | undefined> {
     const listName = 'ForumReplies';
     const body = JSON.stringify({
       Title: `Reply to ${topicId}`,
       Body: replyBody,
-      TopicId: topicId, // SP formatting for lookup field
-      LikesCount: 0
+      TopicIdId: topicId, // Set the custom TopicId lookup column
+      IsAcceptedAnswer: false
     });
 
     try {
       const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items`, 
         SPHttpClient.configurations.v1, 
-        {
-          body: body
-        }
+        { body: body }
       );
       
       if (!response.ok) {
@@ -225,8 +250,7 @@ export class ForumService {
 
       const item = await response.json();
       
-      // Also update the topic's reply count and last activity
-      await this._incrementTopicRepliesAndActivity(topicId);
+      await this._safeIncrement('ForumTopics', topicId, 'RepliesCount');
 
       return {
         id: item.Id,
@@ -240,101 +264,108 @@ export class ForumService {
       };
     } catch (error) {
       console.error('Error creating reply', error);
-      return null;
+      throw error;
     }
   }
 
-  private async _incrementTopicRepliesAndActivity(topicId: number): Promise<void> {
-    // In a production app, you might want to use a more robust way to increment, but this is a simple update
+  public async acceptReply(replyId: number, topicId: number): Promise<void> {
+    // Requires resolving any previous accepted answer first if there can only be one, 
+    // but for now just mark this one as accepted.
     try {
-      // First get current count
-      const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})?$select=RepliesCount`, SPHttpClient.configurations.v1);
-      const data = await getResponse.json();
-      const currentCount = data.RepliesCount || 0;
-
-      const body = JSON.stringify({
-        RepliesCount: currentCount + 1
-      });
-
-      const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
+      const response = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})`, 
         SPHttpClient.configurations.v1, 
         {
           headers: {
             'X-HTTP-Method': 'MERGE',
             'IF-MATCH': '*'
           },
-          body: body
+          body: JSON.stringify({ IsAcceptedAnswer: true })
         }
       );
-      
-      if (!postResponse.ok) {
-        const errText = await postResponse.text();
-        console.error(`Failed to update topic replies count: ${postResponse.status} - ${errText}`);
-      }
+      if (!response.ok) throw new Error(await response.text());
     } catch (error) {
-      console.error('Failed to update topic replies count', error);
+      console.error('Failed to accept reply', error);
+      throw error;
     }
   }
 
   public async likeTopic(topicId: number): Promise<void> {
-    
     try {
-      const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})?$select=LikesCount`, SPHttpClient.configurations.v1);
-      const data = await getResponse.json();
-      const currentCount = data.LikesCount || 0;
+      // Check for duplicate
+      const checkRes = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopicLikes')/items?$filter=TopicId eq ${topicId} and UserEmail eq '${this.context.pageContext.user.email}'`, SPHttpClient.configurations.v1);
+      const checkData = await checkRes.json();
+      if (checkData.value && checkData.value.length > 0) return;
 
-      const body = JSON.stringify({
-        LikesCount: currentCount + 1
+      const postRes = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopicLikes')/items`, SPHttpClient.configurations.v1, {
+        body: JSON.stringify({ 
+          Title: `Like for topic ${topicId}`, 
+          TopicId: topicId,
+          UserEmail: this.context.pageContext.user.email
+        })
       });
-
-      const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumTopics')/items(${topicId})`, 
-        SPHttpClient.configurations.v1, 
-        {
-          headers: {
-            'X-HTTP-Method': 'MERGE',
-            'IF-MATCH': '*'
-          },
-          body: body
-        }
-      );
-
-      if (!postResponse.ok) {
-        const errText = await postResponse.text();
-        console.error(`Failed to like topic: ${postResponse.status} - ${errText}`);
-      }
+      if (!postRes.ok) throw new Error(await postRes.text());
     } catch (error) {
       console.error('Failed to like topic', error);
+      throw error;
     }
   }
 
   public async likeReply(replyId: number): Promise<void> {
-    
     try {
-      const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})?$select=LikesCount`, SPHttpClient.configurations.v1);
-      const data = await getResponse.json();
-      const currentCount = data.LikesCount || 0;
+      const checkRes = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplyLikes')/items?$filter=ReplyId eq ${replyId} and UserEmail eq '${this.context.pageContext.user.email}'`, SPHttpClient.configurations.v1);
+      const checkData = await checkRes.json();
+      if (checkData.value && checkData.value.length > 0) return;
 
-      const body = JSON.stringify({
-        LikesCount: currentCount + 1
+      const postRes = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplyLikes')/items`, SPHttpClient.configurations.v1, {
+        body: JSON.stringify({ 
+          Title: `Like for reply ${replyId}`, 
+          ReplyId: replyId,
+          UserEmail: this.context.pageContext.user.email
+        })
       });
-
-      const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('ForumReplies')/items(${replyId})`, 
-        SPHttpClient.configurations.v1, 
-        {
-          headers: {
-            'X-HTTP-Method': 'MERGE',
-            'IF-MATCH': '*'
-          },
-          body: body
-        }
-      );
-
-      if (!postResponse.ok) {
-        const errText = await postResponse.text();
-        console.error(`Failed to like reply: ${postResponse.status} - ${errText}`);
-      }
+      if (!postRes.ok) throw new Error(await postRes.text());
     } catch (error) {
       console.error('Failed to like reply', error);
+      throw error;
+    }
+  }
+
+  public async incrementTopicViews(topicId: number): Promise<void> {
+    await this._safeIncrement('ForumTopics', topicId, 'ViewsCount');
+  }
+
+  private async _safeIncrement(listName: string, itemId: number, fieldToIncrement: string): Promise<void> {
+    let success = false;
+    let attempts = 0;
+    while (!success && attempts < 3) {
+      try {
+        attempts++;
+        const getResponse = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items(${itemId})?$select=${fieldToIncrement}`, SPHttpClient.configurations.v1);
+        const data = await getResponse.json();
+        const currentCount = data[fieldToIncrement] || 0;
+        const etag = data['odata.etag'];
+
+        const postResponse = await this.context.spHttpClient.post(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items(${itemId})`, 
+          SPHttpClient.configurations.v1, 
+          {
+            headers: {
+              'X-HTTP-Method': 'MERGE',
+              'IF-MATCH': etag || '*' // Fallback to * if ETag is somehow missing
+            },
+            body: JSON.stringify({ [fieldToIncrement]: currentCount + 1 })
+          }
+        );
+        
+        if (postResponse.ok) {
+          success = true;
+        } else if (postResponse.status !== 412) { // 412 Precondition Failed
+          console.error(`Failed to increment ${fieldToIncrement}`, await postResponse.text());
+          break;
+        }
+      } catch (e) {
+        console.error('Error in safe increment', e);
+        break;
+      }
     }
   }
 }

@@ -22,4 +22,5 @@ export interface ITopic {
   body?: string;
   likesCount?: number;
   currentUserLiked?: boolean;
+  attachments?: { fileName: string; serverRelativeUrl: string }[];
 }
