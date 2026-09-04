@@ -108,10 +108,8 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
 
   private handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (this.state.searchQuery.trim()) {
-      // In a real app, this would route to a search results page or filter the current topics
-      window.location.href = `https://forum.cirruspilots.org/search?q=${encodeURIComponent(this.state.searchQuery)}`;
-    }
+    // Close the search dropdown to show the filtered results
+    this.setState({ isSearchOpen: false });
   }
 
   private toggleCategory = () => {
@@ -127,7 +125,16 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
   }
 
   public render(): React.ReactElement<ICopaHomePageProps> {
-    const sortedTopics = [...this.state.topics].sort((a, b) => {
+    // First, filter by search query if one exists
+    const query = this.state.searchQuery.trim().toLowerCase();
+    const filteredTopics = query 
+      ? this.state.topics.filter(t => 
+          (t.title && t.title.toLowerCase().includes(query)) || 
+          (t.body && t.body.toLowerCase().includes(query))
+        )
+      : this.state.topics;
+
+    const sortedTopics = [...filteredTopics].sort((a, b) => {
       if (this.state.selectedTab === 'top') {
         // Sort by total engagement (likes + replies + views)
         const engagementA = (a.likesCount || 0) + (a.repliesCount || 0) + (a.viewsCount || 0);
