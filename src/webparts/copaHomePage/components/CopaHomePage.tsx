@@ -3,6 +3,7 @@ import { Icon } from '@fluentui/react';
 import styles from './CopaHomePage.module.scss';
 import type { ICopaHomePageProps } from './ICopaHomePageProps';
 import { TopicList } from './TopicList/TopicList';
+import { TopicCard } from './TopicCard/TopicCard';
 import { CreatePost } from './CreatePost/CreatePost';
 import { ForumService } from '../../../services/ForumService';
 import { ITopic } from '../../../models/ITopic';
@@ -19,6 +20,7 @@ export interface ICopaHomePageState {
   categories: ICategory[];
   isLoading: boolean;
   isCategoriesLoading: boolean;
+  selectedTopic: ITopic | null;
 }
 
 export default class CopaHomePage extends React.Component<ICopaHomePageProps, ICopaHomePageState> {
@@ -37,7 +39,8 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
       topics: [],
       categories: [],
       isLoading: true,
-      isCategoriesLoading: true
+      isCategoriesLoading: true,
+      selectedTopic: null
     };
     this._forumService = new ForumService(props.context);
     this._containerRef = React.createRef<HTMLDivElement>();
@@ -130,7 +133,8 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
     const filteredTopics = query 
       ? this.state.topics.filter(t => 
           (t.title && t.title.toLowerCase().includes(query)) || 
-          (t.body && t.body.toLowerCase().includes(query))
+          (t.body && t.body.toLowerCase().includes(query)) ||
+          (t.category && t.category.toLowerCase().includes(query))
         )
       : this.state.topics;
 
@@ -180,6 +184,7 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
                 </div>
               )}
             </div>
+            {/* Hamburger Menu Disabled 
             <div className={styles.hamburgerContainer}>
               <Icon iconName="GlobalNavButton" className={styles.iconMenu} onClick={this.toggleHamburger} />
               {this.state.isHamburgerOpen && (
@@ -223,13 +228,14 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
                 </div>
               )}
             </div>
+            */}
           </div>
         </header>
 
         <div className={styles.mainContent}>
           <div className={styles.heroBanner}>
             <h2>Welcome to the shield forum!</h2>
-            <a href="https://cirruspilots.org/Join" className={styles.btnJoinCopa}>Join Shield</a>
+            {/* <a href="https://cirruspilots.org/Join" className={styles.btnJoinCopa}>Join Shield</a> */}
           </div>
 
           <div className={styles.categoryNav}>
@@ -268,6 +274,18 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
 
           {this.state.isLoading ? (
             <div style={{color: '#fff', padding: '20px'}}>Loading topics...</div>
+          ) : this.state.selectedTopic ? (
+            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+              <button onClick={() => this.setState({ selectedTopic: null })} style={{ background: 'transparent', border: 'none', color: '#0078d4', cursor: 'pointer', marginBottom: '15px', display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: 'bold' }}>
+                <Icon iconName="ChevronLeft" style={{ marginRight: '5px' }} /> Back to topics
+              </button>
+              <TopicCard 
+                topic={this.state.selectedTopic} 
+                forumService={this._forumService}
+                currentUserDisplayName={this.props.context.pageContext.user.displayName}
+                isDetailView={true}
+              />
+            </div>
           ) : (
             <div style={{ maxWidth: '800px', margin: '0 auto' }}>
               <CreatePost 
@@ -279,6 +297,7 @@ export default class CopaHomePage extends React.Component<ICopaHomePageProps, IC
                 topics={sortedTopics} 
                 forumService={this._forumService}
                 currentUserDisplayName={this.props.context.pageContext.user.displayName}
+                onSelectTopic={(topic) => this.setState({ selectedTopic: topic })}
               />
             </div>
           )}

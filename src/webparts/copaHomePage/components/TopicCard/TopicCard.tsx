@@ -11,17 +11,28 @@ export interface ITopicCardProps {
   topic: ITopic;
   forumService: ForumService;
   currentUserDisplayName: string;
+  isDetailView?: boolean;
+  onSelectTopic?: (topic: ITopic) => void;
 }
 
 export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
-  const { topic, forumService, currentUserDisplayName } = props;
+  const { topic, forumService, currentUserDisplayName, isDetailView, onSelectTopic } = props;
   const [isLiked, setIsLiked] = useState(topic.currentUserLiked || false);
   const [likesCount, setLikesCount] = useState(topic.likesCount || 0);
-  const [showReplies, setShowReplies] = useState(false);
+  const [showReplies, setShowReplies] = useState(!!isDetailView);
   const [replies, setReplies] = useState<IReply[]>([]);
   const [newReplyBody, setNewReplyBody] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [repliesCount, setRepliesCount] = useState(topic.repliesCount || 0);
+
+  React.useEffect(() => {
+    if (isDetailView && replies.length === 0) {
+      void forumService.incrementTopicViews(topic.id);
+      forumService.getReplies(topic.id).then(loadedReplies => {
+        setReplies(loadedReplies);
+      });
+    }
+  }, [isDetailView, topic.id]);
 
   const handleLike = async () => {
     if (isLiked) return; 
@@ -37,14 +48,7 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
     }
   };
 
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.origin + window.location.pathname + `?topicId=${topic.id}`);
-      alert("Link copied to clipboard!");
-    } catch (err) {
-      console.error('Failed to copy', err);
-    }
-  };
+
 
   const toggleReplies = async () => {
     const willShow = !showReplies;
@@ -55,8 +59,12 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
       void forumService.incrementTopicViews(topic.id);
       
       if (replies.length === 0) {
-        const loadedReplies = await forumService.getReplies(topic.id);
-        setReplies(loadedReplies);
+        try {
+          const loadedReplies = await forumService.getReplies(topic.id);
+          setReplies(loadedReplies);
+        } catch (error) {
+          console.error("Failed to load replies:", error);
+        }
       }
     }
   };
@@ -79,14 +87,7 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
     }
   };
 
-  const handleAcceptAnswer = async (replyId: number) => {
-    try {
-      await forumService.acceptReply(replyId, topic.id);
-      setReplies(prev => prev.map(r => r.id === replyId ? { ...r, isAcceptedAnswer: true } : { ...r, isAcceptedAnswer: false }));
-    } catch (error) {
-      alert("Failed to accept answer: " + (error as Error).message);
-    }
-  };
+
 
   const handleReplyLike = async (replyId: number, currentLikedState: boolean) => {
     if (currentLikedState) return;
@@ -150,7 +151,13 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
       </div>
 
       <div className={styles.cardContent}>
-        <a href={topic.url} className={styles.topicTitle} onClick={(e) => e.preventDefault()}>
+        <a href={topic.url} className={styles.topicTitle} onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!isDetailView && onSelectTopic) {
+            onSelectTopic(topic);
+          }
+        }}>
           {topic.isPinned && <Icon iconName="Pinned" className={styles.iconPinned} />}
           {topic.isLocked && <Icon iconName="Lock" className={styles.iconLocked} />}
           {topic.title}
@@ -174,7 +181,7 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
         )}
       </div>
 
-      <div className={styles.cardActions}>
+      <div className={styles.cardActions} onClick={(e) => e.stopPropagation()}>
         <button className={`${styles.actionButton} ${isLiked ? styles.liked : ''}`} onClick={handleLike}>
           <Icon iconName={isLiked ? "LikeSolid" : "Like"} className={styles.icon} />
           {likesCount > 0 ? likesCount : 'Like'}
@@ -183,14 +190,11 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
           <Icon iconName="Comment" className={styles.icon} />
           {repliesCount > 0 ? repliesCount : 'Comment'}
         </button>
-        <button className={styles.actionButton} onClick={handleShare}>
-          <Icon iconName="Share" className={styles.icon} />
-          Share
-        </button>
+        {/* Share button removed as requested */}
       </div>
 
       {showReplies && (
-        <div className={styles.repliesSection}>
+        <div className={styles.repliesSection} onClick={(e) => e.stopPropagation()}>
           <div className={styles.replyInputArea}>
             <div className={styles.replyAvatar}>
               {getInitials(currentUserDisplayName || 'User')}
@@ -227,11 +231,6 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
                     <div className={styles.replyHeader}>
                       <span className={styles.replyAuthor}>{reply.authorName}</span>
                       <span className={styles.replyDate}>{formatDate(reply.createdDate)}</span>
-                      {reply.isAcceptedAnswer && (
-                        <span style={{ color: '#107c10', fontWeight: 600, fontSize: '12px', marginLeft: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Icon iconName="CompletedSolid" /> Accepted Answer
-                        </span>
-                      )}
                     </div>
                     <div className={styles.replyBody} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reply.body) }} />
                     <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
@@ -241,16 +240,6 @@ export const TopicCard: React.FunctionComponent<ITopicCardProps> = (props) => {
                       >
                         <Icon iconName={reply.currentUserLiked ? "LikeSolid" : "Like"} /> {reply.likesCount || 'Like'}
                       </button>
-                      
-                      {/* Only topic author should accept answer in reality, but allowing it here for demo purposes */}
-                      {!reply.isAcceptedAnswer && (
-                        <button 
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#605e5c', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', padding: 0 }}
-                          onClick={() => void handleAcceptAnswer(reply.id)}
-                        >
-                          <Icon iconName="SkypeCircleCheck" /> Accept Answer
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

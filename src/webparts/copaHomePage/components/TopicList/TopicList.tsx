@@ -8,6 +8,7 @@ export interface ITopicListProps {
   topics: ITopic[];
   forumService: ForumService;
   currentUserDisplayName: string;
+  onSelectTopic?: (topic: ITopic) => void;
 }
 
 export const TopicList: React.FunctionComponent<ITopicListProps> = (props) => {
@@ -30,6 +31,7 @@ export const TopicList: React.FunctionComponent<ITopicListProps> = (props) => {
             topic={topic} 
             forumService={props.forumService} 
             currentUserDisplayName={props.currentUserDisplayName}
+            onSelectTopic={props.onSelectTopic}
           />
         ))
       )}

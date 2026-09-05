@@ -113,13 +113,17 @@ export class ForumService {
 
   public async getReplies(topicId: number): Promise<IReply[]> {
     const listName = 'ForumReplies'; 
-    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,IsAcceptedAnswer,Author/EMail,Author/Title,Created&$expand=Author&$filter=TopicId eq ${topicId}&$orderby=Created asc`;
+    const query = `${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/items?$select=Id,Title,Body,IsAcceptedAnswer,Author/EMail,Author/Title,Created,TopicId/Id&$expand=Author,TopicId&$filter=TopicId/Id eq ${topicId}&$orderby=Created asc`;
 
     try {
+      const fieldsRes = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/fields?$filter=TypeAsString eq 'Lookup'`, SPHttpClient.configurations.v1);
+      const fieldsData = await fieldsRes.json();
+      const lookupFields = fieldsData.value ? fieldsData.value.map((f: any) => f.InternalName) : [];
+      
       const response: SPHttpClientResponse = await this.context.spHttpClient.get(query, SPHttpClient.configurations.v1);
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Failed to fetch replies: ${response.status} - ${errText}`);
+        throw new Error(`Failed to fetch replies: ${response.status} - ${errText}. Lookup fields in list: ${lookupFields.join(', ')}`);
       }
       const data = await response.json();
       if (!data.value || data.value.length === 0) return [];
@@ -233,8 +237,7 @@ export class ForumService {
     const body = JSON.stringify({
       Title: `Reply to ${topicId}`,
       Body: replyBody,
-      TopicIdId: topicId, // Set the custom TopicId lookup column
-      IsAcceptedAnswer: false
+      TopicIdId: Number(topicId)
     });
 
     try {
@@ -245,7 +248,13 @@ export class ForumService {
       
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Failed to create reply: ${response.status} - ${errText}`);
+        
+        // Fetch fields for diagnostics
+        const fieldsRes = await this.context.spHttpClient.get(`${this.siteUrl}/_api/web/lists/getByTitle('${listName}')/fields?$filter=TypeAsString eq 'Lookup'`, SPHttpClient.configurations.v1);
+        const fieldsData = await fieldsRes.json();
+        const lookupFields = fieldsData.value ? fieldsData.value.map((f: any) => f.InternalName) : [];
+
+        throw new Error(`Failed to create reply: ${response.status} - ${errText}. Lookup fields in list: ${lookupFields.join(', ')}`);
       }
 
       const item = await response.json();
